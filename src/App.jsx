@@ -687,10 +687,6 @@ export default function App() {
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <button className="btn-hover" style={s.btn("ghost")} onClick={() => {
-              downloadJSON(db, `mercadomap-${new Date().toISOString().split("T")[0]}.json`, setExportModal);
-              showToast("Dados exportados!");
-            }}>⬇ Exportar</button>
             <button
               onClick={() => setShowSettings(v => !v)}
               title="Configurações"
