@@ -424,6 +424,7 @@ export default function App() {
   const [editingEntries, setEditingEntries] = useState({});
   const [editingMeta, setEditingMeta] = useState({});
 
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const [exportModal, setExportModal] = useState(null); // { title, content, filename }
@@ -615,7 +616,7 @@ export default function App() {
   ];
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "'DM Sans', system-ui, sans-serif" }}>
+    <div className="app-layout" style={{ display: "grid", gridTemplateColumns: "248px 1fr", minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "'DM Sans', system-ui, sans-serif" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;700&family=Syne:wght@600;700;800&family=Space+Mono:wght@400;700&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -625,10 +626,21 @@ export default function App() {
         @keyframes fadeIn { from { opacity:0; transform:translateY(8px) } to { opacity:1; transform:translateY(0) } }
         .row-hover:hover { background: ${C.surface2} !important; }
         .btn-hover:hover { filter: brightness(1.1); transform: translateY(-1px); }
+        .hamburger { display: none; }
+        @media (max-width: 768px) {
+          .app-layout { grid-template-columns: 1fr !important; }
+          .sidebar {
+            position: fixed !important; left: 0; top: 0; height: 100vh !important;
+            z-index: 200; width: 248px;
+            transform: translateX(-100%); transition: transform 0.25s ease;
+          }
+          .sidebar.open { transform: translateX(0); box-shadow: 4px 0 32px #000a; }
+          .hamburger { display: flex !important; }
+        }
       `}</style>
 
       {/* SIDEBAR */}
-      <aside style={{ background: C.surface, borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column", position: "sticky", top: 0, height: "100vh", overflow: "hidden" }}>
+      <aside className={`sidebar${mobileOpen ? " open" : ""}`} style={{ background: C.surface, borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column", position: "sticky", top: 0, height: "100vh", overflow: "hidden" }}>
         <div style={{ padding: "22px 18px", borderBottom: `1px solid ${C.border}` }}>
           <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 20, fontWeight: 800, letterSpacing: "-0.5px" }}>
             Mercado<span style={{ color: C.accent }}>Map</span>
@@ -637,7 +649,7 @@ export default function App() {
         </div>
         <nav style={{ flex: 1, padding: "10px 0" }}>
           {navItems.map((n) => (
-            <div key={n.id} onClick={() => setTab(n.id)} style={{
+            <div key={n.id} onClick={() => { setTab(n.id); setMobileOpen(false); }} style={{
               display: "flex", alignItems: "center", gap: 10, padding: "10px 18px", cursor: "pointer",
               fontSize: 13, fontFamily: "'Syne', sans-serif", fontWeight: 700,
               color: tab === n.id ? C.accent : C.muted2,
@@ -659,12 +671,20 @@ export default function App() {
         </div>
       </aside>
 
+      {/* MOBILE OVERLAY */}
+      {mobileOpen && (
+        <div onClick={() => setMobileOpen(false)} style={{ position: "fixed", inset: 0, background: "#000a", zIndex: 199 }} />
+      )}
+
       {/* MAIN */}
       <div style={{ display: "flex", flexDirection: "column", overflow: "auto" }}>
         {/* TOP BAR */}
         <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "14px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 10 }}>
-          <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 15, fontWeight: 800 }}>
-            {navItems.find(n => n.id === tab)?.icon} {navItems.find(n => n.id === tab)?.label}
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <button className="hamburger btn-hover" onClick={() => setMobileOpen(v => !v)} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 8, width: 36, height: 36, cursor: "pointer", fontSize: 18, color: C.muted2, alignItems: "center", justifyContent: "center" }}>☰</button>
+            <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 15, fontWeight: 800 }}>
+              {navItems.find(n => n.id === tab)?.icon} {navItems.find(n => n.id === tab)?.label}
+            </div>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <button className="btn-hover" style={s.btn("ghost")} onClick={() => {
