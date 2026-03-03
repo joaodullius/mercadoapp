@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { auth, onAuthStateChanged, loginWithGoogle, logoutUser, loadUserDB, saveUserDB, deleteUserDB } from "./firebase";
 
 // ─── STORAGE ───────────────────────────────────────────────────────────────
 const STORAGE_KEY = "mercadomap_v1";
@@ -369,11 +370,19 @@ export default function App() {
   const [db, setDB] = useState(loadDB);
   const [tab, setTab] = useState("scan");
   const [toast, setToast] = useState(null);
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
 
   useEffect(() => {
-    loadDBFromStorage().then(data => {
-      if (data) setDB(data);
+    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+      setUser(firebaseUser);
+      setAuthLoading(false);
+      if (firebaseUser) {
+        const data = await loadUserDB(firebaseUser.uid);
+        if (data) setDB(data);
+      }
     });
+    return unsub;
   }, []);
 
   // Scan state
@@ -421,10 +430,19 @@ export default function App() {
 
   // Receipt viewer/editor
   const [expandedReceiptId, setExpandedReceiptId] = useState(null);
+  const [showCotacoes, setShowCotacoes] = useState(false);
   const [editingEntries, setEditingEntries] = useState({});
   const [editingMeta, setEditingMeta] = useState({});
 
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Debounced Firestore sync
+  const saveTimer = useRef(null);
+  useEffect(() => {
+    if (!user) return;
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => saveUserDB(user.uid, db), 1500);
+  }, [db, user]);
   const [showSettings, setShowSettings] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const [exportModal, setExportModal] = useState(null); // { title, content, filename }
@@ -435,11 +453,12 @@ export default function App() {
   }, []);
 
   const clearAllData = () => {
-    const empty = { receipts: [], products: {}, entries: [] };
+    const empty = { receipts: [], products: {}, entries: [], dictionary: {} };
     setDB(empty);
     saveDB(empty);
     try { localStorage.removeItem("mercadomap_v1"); } catch {}
     try { window.storage?.delete("mercadomap_v1"); } catch {}
+    if (user) deleteUserDB(user.uid);
     setShowSettings(false);
     setConfirmClear(false);
     showToast("Todos os dados foram apagados.");
@@ -603,6 +622,41 @@ export default function App() {
   })();
 
   // ── RENDER ──
+  if (authLoading) return (
+    <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Syne', sans-serif", color: C.muted2 }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Syne:wght@800&display=swap');`}</style>
+      <div style={{ textAlign: "center" }}>
+        <div style={{ fontSize: 28, fontWeight: 800, marginBottom: 8 }}>Mercado<span style={{ color: C.accent }}>Map</span></div>
+        <div style={{ fontSize: 13, color: C.muted }}>Carregando...</div>
+      </div>
+    </div>
+  );
+
+  if (!user) return (
+    <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans', system-ui, sans-serif", color: C.text }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Syne:wght@800&display=swap'); * { box-sizing: border-box; margin: 0; padding: 0; }`}</style>
+      <div style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 24 }}>
+        <div>
+          <div style={{ fontSize: 36, fontWeight: 800, fontFamily: "'Syne', sans-serif", letterSpacing: "-1px" }}>
+            Mercado<span style={{ color: C.accent }}>Map</span>
+          </div>
+          <div style={{ fontSize: 11, color: C.muted, marginTop: 4, letterSpacing: "1.5px", textTransform: "uppercase" }}>Comparador de preços</div>
+        </div>
+        <div style={{ width: 1, height: 32, background: C.border }} />
+        <button
+          onClick={() => loginWithGoogle().catch(e => alert(e.message))}
+          style={{ display: "flex", alignItems: "center", gap: 12, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: "14px 28px", cursor: "pointer", fontSize: 15, fontWeight: 600, color: C.text, transition: "border-color .15s" }}
+          onMouseEnter={e => e.currentTarget.style.borderColor = C.accent}
+          onMouseLeave={e => e.currentTarget.style.borderColor = C.border}
+        >
+          <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20H24v8h11.3C33.7 33.2 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.8 1.1 7.9 3l5.7-5.7C34.1 6.5 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20c11 0 20-9 20-20 0-1.3-.1-2.7-.4-4z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.5 15.1 18.9 12 24 12c3 0 5.8 1.1 7.9 3l5.7-5.7C34.1 6.5 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-1.9 13.5-5l-6.2-5.2C29.5 35.6 26.9 36 24 36c-5.3 0-9.7-2.8-11.3-7l-6.5 5C9.6 39.6 16.3 44 24 44z"/><path fill="#1976D2" d="M43.6 20H24v8h11.3c-.8 2.2-2.3 4.1-4.2 5.4l6.2 5.2C40.9 35.2 44 30 44 24c0-1.3-.1-2.7-.4-4z"/></svg>
+          Entrar com Google
+        </button>
+        <div style={{ fontSize: 11, color: C.muted }}>Os seus dados ficam salvos na sua conta</div>
+      </div>
+    </div>
+  );
+
   const navItems = [
     { id: "scan",     label: "Escanear NF",      icon: "📸" },
     { id: "manual",   label: "Inserir Manual",    icon: "✏️" },
@@ -700,6 +754,18 @@ export default function App() {
           <div style={{ background: C.surface2, borderBottom: `1px solid ${C.border}`, padding: "20px 24px", animation: "fadeIn .2s ease" }}>
             <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 14, marginBottom: 16 }}>⚙️ Configurações</div>
             <div style={{ display: "grid", gap: 12, maxWidth: 480 }}>
+
+              {/* User */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: C.surface3, borderRadius: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  {user.photoURL && <img src={user.photoURL} referrerPolicy="no-referrer" style={{ width: 32, height: 32, borderRadius: "50%" }} />}
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{user.displayName}</div>
+                    <div style={{ fontSize: 11, color: C.muted2 }}>{user.email}</div>
+                  </div>
+                </div>
+                <button className="btn-hover" style={s.btn("ghost")} onClick={() => logoutUser()}>Sair</button>
+              </div>
 
               {/* Stats */}
               <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: 12, color: C.muted2, padding: "10px 14px", background: C.surface3, borderRadius: 8 }}>
@@ -1734,11 +1800,20 @@ export default function App() {
           {/* ─── RECEIPTS TAB ─── */}
           {tab === "receipts" && (
             <div style={{ display: "grid", gap: 10 }}>
+              {/* Toggle cotações */}
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <button
+                  onClick={() => setShowCotacoes(v => !v)}
+                  style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, padding: "6px 12px", borderRadius: 8, cursor: "pointer", transition: "all .15s", background: showCotacoes ? C.yellow + "18" : C.surface2, border: `1px solid ${showCotacoes ? C.yellow + "66" : C.border}`, color: showCotacoes ? C.yellow : C.muted2 }}
+                >
+                  👁 {showCotacoes ? "Ocultar cotações" : "Ver cotações"}
+                </button>
+              </div>
               {db.receipts.length === 0 ? (
                 <div style={{ textAlign: "center", padding: "60px 20px", color: C.muted }}>
                   <div style={{ fontSize: 36, marginBottom: 12 }}>🧾</div><div>Nenhuma nota fiscal salva ainda.</div>
                 </div>
-              ) : [...db.receipts].reverse().map((r) => {
+              ) : [...db.receipts].reverse().filter(r => showCotacoes || !r.cotacao).map((r) => {
                 const total = r.items.reduce((s, i) => s + i.price, 0);
                 const isOpen = expandedReceiptId === r.id;
                 // editingEntries[r.id] holds mutable copy; fall back to saved items
